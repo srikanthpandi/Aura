@@ -1,0 +1,12 @@
+{
+  "name": "aura-voice-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A local Gemini-powered voice assistant for the browser",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.mjs"
+  },
+  "engines": {
+    "node": ">=22.9.0"
+  }
+}

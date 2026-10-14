@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#060b18">
+    <meta name="description" content="AURA is your personal AI voice assistant.">
+    <title>AURA — your voice assistant</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="AURA home">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span>AURA</span>
+        </a>
+        <span class="connection"><span class="connection-dot"></span> GEMINI · PERSONAL AI</span>
+      </header>
+
+      <section class="assistant" aria-label="Voice assistant">
+        <div class="assistant-stage">
+          <div class="orb-wrap">
+            <div class="orb-glow"></div>
+            <div class="orb" aria-hidden="true">
+              <span class="orb-wave orb-wave-one"></span>
+              <span class="orb-wave orb-wave-two"></span>
+              <span class="orb-center"></span>
+            </div>
+          </div>
+          <div class="intro" id="intro">
+            <p class="eyebrow">YOUR PERSONAL AI</p>
+            <h1>Hi, I’m <span>AURA.</span></h1>
+            <p class="intro-copy">Your voice, your curiosity. Ask me anything.</p>
+            <div class="suggestions" aria-label="Try asking">
+              <button class="suggestion" type="button" data-prompt="What can you help me with?">What can you help me with?</button>
+              <button class="suggestion" type="button" data-prompt="Tell me something interesting">Tell me something interesting</button>
+              <button class="suggestion" type="button" data-prompt="Give me a quick tip for today">A quick tip for today</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="conversation" id="conversation" aria-live="polite" aria-label="Conversation" hidden></div>
+
+        <p class="status" id="status" role="status">Ready when you are</p>
+
+        <div class="voice-control">
+          <button class="mic-button" id="mic-button" type="button" aria-label="Talk to AURA" title="Talk to AURA">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="2.75" width="6" height="12" rx="3"></rect>
+              <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.25m-3.5 0h7"></path>
+            </svg>
+          </button>
+          <span class="voice-hint">TAP TO SPEAK <span aria-hidden="true">·</span> TAP AGAIN TO SEND</span>
+        </div>
+        <p class="disclaimer">AURA can make mistakes. Check important information.</p>
+      </section>
+
+      <footer class="footer">
+        <span class="footer-brand">AURA <span>·</span> HERE FOR THE CURIOSITY IN YOU</span>
+        <span class="voice-note" id="voice-note">Your microphone is only active while you’re recording.</span>
+      </footer>
+    </main>
+  </body>
+</html>
