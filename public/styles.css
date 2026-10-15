@@ -288,6 +288,49 @@ h1 span {
   color: #d4ddec;
 }
 
+.message-sources {
+  align-self: flex-start;
+  max-width: 84%;
+  margin-top: -7px;
+  color: #8e9ab0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.sources-heading {
+  margin: 0 0 3px;
+  color: #a8b9d1;
+  font-weight: 650;
+}
+
+.google-search-suggestions {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.message-sources ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.message-sources a {
+  color: #70dfff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message-sources a:hover {
+  color: #c4f4ff;
+}
+
 .message-error {
   border-color: rgba(255, 130, 142, 0.34);
   color: #ffb4ba;

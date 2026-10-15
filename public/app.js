@@ -95,6 +95,57 @@ function addMessage(text, sender, isError = false) {
   return message;
 }
 
+function addSources(sources, searchSuggestions) {
+  const validSources = (Array.isArray(sources) ? sources : []).filter((source) => {
+    if (typeof source?.title !== "string" || typeof source.url !== "string") {
+      return false;
+    }
+    try {
+      return new URL(source.url).protocol === "https:";
+    } catch {
+      return false;
+    }
+  });
+  if (!validSources.length && (typeof searchSuggestions !== "string" || !searchSuggestions)) {
+    return;
+  }
+
+  const section = document.createElement("div");
+  section.className = "message-sources";
+
+  if (searchSuggestions) {
+    const suggestions = document.createElement("iframe");
+    suggestions.className = "google-search-suggestions";
+    suggestions.title = "Google Search suggestions";
+    suggestions.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox");
+    suggestions.referrerPolicy = "no-referrer";
+    suggestions.srcdoc = searchSuggestions;
+    section.append(suggestions);
+  }
+
+  if (validSources.length) {
+    const heading = document.createElement("p");
+    heading.className = "sources-heading";
+    heading.textContent = "Sources";
+    section.append(heading);
+
+    const list = document.createElement("ul");
+    for (const source of validSources.slice(0, 5)) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = source.title;
+      item.append(link);
+      list.append(item);
+    }
+    section.append(list);
+  }
+  conversation.append(section);
+  conversation.scrollTop = conversation.scrollHeight;
+}
+
 function speak(text) {
   if (!("speechSynthesis" in window)) {
     document.body.dataset.state = "idle";
@@ -252,6 +303,7 @@ async function askAssistant(text) {
     }
     addMessage(text, "user");
     addMessage(answer, "assistant");
+    addSources(result.sources, result.searchSuggestions);
     document.body.dataset.state = "speaking";
     status.textContent = "AURA is speaking…";
     speak(answer);
@@ -309,6 +361,7 @@ async function askWithRecording(blob) {
     }
     addMessage(transcript, "user");
     addMessage(answer, "assistant");
+    addSources(result.sources, result.searchSuggestions);
     document.body.dataset.state = "speaking";
     status.textContent = "AURA is speaking…";
     speak(answer);

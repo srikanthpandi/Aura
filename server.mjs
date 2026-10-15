@@ -12,6 +12,13 @@ const maxAudioBytes = 5 * 1024 * 1024;
 const maxHistoryItems = 12;
 const maxTextLength = 5000;
 const maxGeminiAttempts = 3;
+const currentInformationPattern =
+  /\b(now|today|tonight|this (?:morning|afternoon|evening|week|month|year)|current(?:ly)?|latest|recent(?:ly)?|up[- ]to[- ]date|as of|breaking|news|weather|forecast|stock(?:s)?|share price|exchange rate|score|result|schedule|traffic|version|release|available|price|cost|what happened|202\d|20[3-9]\d|election|president|prime minister|chief minister|ceo|leader|standings|world cup|last (?:match|game|season|election)|richest)\b|\b(?:aaj|abhi|taaza|taza|vartaman|ippudu|ee roju)\b/i;
+
+function getAssistantSystemInstruction() {
+  const currentDate = new Date().toISOString().slice(0, 10);
+  return `You are AURA, a helpful, friendly voice assistant. The current date is ${currentDate} (UTC). Answer clearly and conversationally; keep spoken answers concise unless the user asks for detail. Your built-in knowledge may be out of date. When Google Search is available, use it for current events and other time-sensitive facts, and be clear about dates. Never present old information as current.`;
+}
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -23,6 +30,10 @@ function getRetryDelay(response, attempt) {
     return Math.min(retryAfterSeconds * 1000, 5000);
   }
   return attempt * 1000;
+}
+
+function needsCurrentInformation(message) {
+  return currentInformationPattern.test(message);
 }
 
 const mimeTypes = {
@@ -92,7 +103,11 @@ function validateChatRequest(body) {
   return null;
 }
 
-async function generateContent(contents, generationConfig) {
+async function generateContent(
+  contents,
+  generationConfig,
+  { useGoogleSearch = false, systemInstruction = getAssistantSystemInstruction() } = {},
+) {
   const models = [...new Set([model, fallbackModel])];
   let upstream;
   let respondingModel = model;
@@ -110,14 +125,11 @@ async function generateContent(contents, generationConfig) {
             },
             body: JSON.stringify({
               systemInstruction: {
-                parts: [
-                  {
-                    text: "You are AURA, a helpful, friendly voice assistant. Answer clearly and conversationally. Keep spoken answers concise unless the user asks for detail.",
-                  },
-                ],
+                parts: [{ text: systemInstruction }],
               },
               contents,
               generationConfig,
+              ...(useGoogleSearch ? { tools: [{ google_search: {} }] } : {}),
             }),
             signal: AbortSignal.timeout(30_000),
           },
@@ -189,6 +201,34 @@ function getResponseText(result) {
     .trim();
 }
 
+function getGroundingSources(result) {
+  const chunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const sources = new Map();
+
+  for (const chunk of chunks) {
+    const source = chunk.web;
+    if (typeof source?.uri !== "string" || typeof source.title !== "string") {
+      continue;
+    }
+
+    try {
+      const url = new URL(source.uri);
+      if (url.protocol === "https:") {
+        sources.set(url.href, { title: source.title, url: url.href });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return [...sources.values()];
+}
+
+function getSearchSuggestions(result) {
+  const renderedContent = result.candidates?.[0]?.groundingMetadata?.searchEntryPoint?.renderedContent;
+  return typeof renderedContent === "string" ? renderedContent : "";
+}
+
 async function handleChat(request, response) {
   if (!process.env.GEMINI_API_KEY) {
     sendJson(response, 503, {
@@ -219,7 +259,9 @@ async function handleChat(request, response) {
 
   let generation;
   try {
-    generation = await generateContent(contents, { maxOutputTokens: 800 });
+    generation = await generateContent(contents, { maxOutputTokens: 800 }, {
+      useGoogleSearch: needsCurrentInformation(data.message),
+    });
   } catch (error) {
     sendJson(response, 502, { error: error.message });
     return;
@@ -239,7 +281,11 @@ async function handleChat(request, response) {
     return;
   }
 
-  sendJson(response, 200, { answer });
+  sendJson(response, 200, {
+    answer,
+    sources: getGroundingSources(result),
+    searchSuggestions: getSearchSuggestions(result),
+  });
 }
 
 function validateVoiceRequest(body) {
@@ -304,36 +350,77 @@ async function handleVoice(request, response) {
   }
 
   const mimeType = data.mimeType.split(";")[0].trim();
-  const contents = [
-    ...(data.history ?? []).map(({ role, text }) => ({
-      role,
-      parts: [{ text }],
-    })),
+  const transcriptionContents = [
     {
       role: "user",
       parts: [
         {
-          text: "The attached audio is the user's spoken message. Listen to it, transcribe their exact words in their original language, and answer their question conversationally. You can process the attached audio; do not claim to be text-only or ask the user to type. Return both the transcript and answer.",
+          text: "Transcribe the attached spoken audio exactly in its original language. Do not answer the question. Return only the transcript in the requested JSON format.",
         },
         { inlineData: { mimeType, data: data.audio } },
       ],
     },
   ];
 
-  let generation;
+  let transcriptionGeneration;
   try {
-    generation = await generateContent(contents, {
-      maxOutputTokens: 1200,
+    transcriptionGeneration = await generateContent(transcriptionContents, {
+      maxOutputTokens: 500,
       responseMimeType: "application/json",
       responseSchema: {
         type: "OBJECT",
         properties: {
           transcript: { type: "STRING" },
-          answer: { type: "STRING" },
         },
-        required: ["transcript", "answer"],
-        propertyOrdering: ["transcript", "answer"],
+        required: ["transcript"],
+        propertyOrdering: ["transcript"],
       },
+    }, {
+      systemInstruction:
+        "You are a precise speech transcription assistant. Return the speaker's exact words in the original language using the requested JSON schema. Do not answer the question.",
+    });
+  } catch (error) {
+    sendJson(response, 502, { error: error.message });
+    return;
+  }
+
+  const transcriptionResult = await readGeminiResult(
+    response,
+    transcriptionGeneration.upstream,
+    transcriptionGeneration.respondingModel,
+  );
+  if (!transcriptionResult) {
+    return;
+  }
+
+  let transcription;
+  try {
+    transcription = JSON.parse(getResponseText(transcriptionResult));
+  } catch {
+    sendJson(response, 502, { error: "AURA couldn’t understand that recording. Please try again." });
+    return;
+  }
+
+  if (typeof transcription?.transcript !== "string" || !transcription.transcript.trim()) {
+    sendJson(response, 502, { error: "AURA couldn’t understand that recording. Please try again." });
+    return;
+  }
+
+  const transcript = transcription.transcript.trim();
+  const contents = [
+    ...(data.history ?? []).map(({ role, text }) => ({
+      role,
+      parts: [{ text }],
+    })),
+    { role: "user", parts: [{ text: transcript }] },
+  ];
+
+  let generation;
+  try {
+    generation = await generateContent(contents, {
+      maxOutputTokens: 800,
+    }, {
+      useGoogleSearch: needsCurrentInformation(transcript),
     });
   } catch (error) {
     sendJson(response, 502, { error: error.message });
@@ -345,33 +432,17 @@ async function handleVoice(request, response) {
     return;
   }
 
-  const responseText = getResponseText(result);
-  let answer;
-  try {
-    answer = JSON.parse(responseText);
-  } catch {
-    sendJson(response, 502, { error: "AURA couldn’t understand that recording. Please try again." });
-    return;
-  }
-
-  if (
-    typeof answer?.transcript !== "string" ||
-    typeof answer?.answer !== "string"
-  ) {
-    sendJson(response, 502, { error: "AURA couldn’t understand that recording. Please try again." });
-    return;
-  }
-
-  const transcript = answer.transcript.trim();
-  const reply = answer.answer.trim();
-  if (!transcript || !reply) {
-    sendJson(response, 502, { error: "AURA couldn’t understand that recording. Please try again." });
+  const reply = getResponseText(result);
+  if (!reply) {
+    sendJson(response, 502, {
+      error: "Gemini did not return an answer. Please try asking another way.",
+    });
     return;
   }
 
   if (
     /(?:i(?:'m| am) )?(?:unable|not able|cannot|can't|can not) (?:to )?(?:listen|hear|access|transcribe).{0,100}audio|text[- ]based ai|provide the text of what you said/i.test(
-      `${transcript} ${reply}`,
+      reply,
     )
   ) {
     sendJson(response, 502, {
@@ -383,6 +454,8 @@ async function handleVoice(request, response) {
   sendJson(response, 200, {
     transcript,
     answer: reply,
+    sources: getGroundingSources(result),
+    searchSuggestions: getSearchSuggestions(result),
   });
 }
 

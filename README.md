@@ -25,6 +25,8 @@ The API key stays in the local server's `.env` file and is not sent to browser c
 
 If Gemini is overloaded, AURA retries and then automatically tries the `GEMINI_FALLBACK_MODEL`, which defaults to `gemini-3.5-flash-lite`. You can change the primary model with `GEMINI_MODEL`, the fallback with `GEMINI_FALLBACK_MODEL`, or the local server port with `PORT` in `.env`; restart the server after changing settings.
 
+AURA includes today's date in its instructions and can use Gemini's Google Search grounding for questions that ask about current or time-sensitive information. When search results are available, AURA shows links to its sources. Spoken questions are transcribed first so AURA only uses web search when the recognized question needs current information. Search grounding can use additional Gemini quota and may incur charges.
+
 ## Deploy to Render
 
 The included `render.yaml` configures a free Render web service in Singapore. Push this project to a GitHub repository, then in Render choose **New > Blueprint** and connect that repository. Render will prompt for `GEMINI_API_KEY`; enter it as a secret environment variable in Render, never in the repository or `render.yaml`. Render provides HTTPS and sets the service port automatically. The app binds to `127.0.0.1` locally and to `0.0.0.0` on Render.
