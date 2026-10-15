@@ -36,6 +36,12 @@ function needsCurrentInformation(message) {
   return currentInformationPattern.test(message);
 }
 
+function isDailyQuotaExhausted(message) {
+  return /(?:free[_ ]tier[_ ]requests|requests[_ ]per[_ ]day|per[- ]day quota|daily quota|retry in \d+\s*h)/i.test(
+    message,
+  );
+}
+
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -145,6 +151,22 @@ async function generateContent(
       if (![429, 500, 502, 503, 504].includes(upstream.status)) {
         break modelAttempts;
       }
+      if (upstream.status === 429) {
+        try {
+          const body = await upstream.clone().json();
+          if (isDailyQuotaExhausted(body.error?.message ?? "")) {
+            if (modelIndex < models.length - 1) {
+              console.warn(
+                `${currentModel} has reached its daily quota; trying fallback model ${models[modelIndex + 1]}.`,
+              );
+              break;
+            }
+            break modelAttempts;
+          }
+        } catch (error) {
+          console.warn(`Could not check Gemini's quota details: ${error.message}`);
+        }
+      }
       if (attempt === maxGeminiAttempts) {
         if (modelIndex === models.length - 1) {
           break modelAttempts;
@@ -184,6 +206,8 @@ async function readGeminiResult(response, upstream, respondingModel) {
       error:
         upstream.status === 401 || upstream.status === 403
           ? "Gemini rejected the API key. Check GEMINI_API_KEY in your .env file."
+          : upstream.status === 429 && isDailyQuotaExhausted(message ?? "")
+            ? "AURA has reached the Gemini API daily request limit. Check your Google AI Studio usage and billing, or wait for the quota to reset, then try again."
           : [429, 500, 502, 503, 504].includes(upstream.status)
             ? "Gemini is still busy after trying the backup model. Please wait a minute and try again."
             : message ?? "Gemini could not answer right now. Please try again.",

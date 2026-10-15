@@ -27,6 +27,8 @@ If Gemini is overloaded, AURA retries and then automatically tries the `GEMINI_F
 
 AURA includes today's date in its instructions and can use Gemini's Google Search grounding for questions that ask about current or time-sensitive information. When search results are available, AURA shows links to its sources. Spoken questions are transcribed first so AURA only uses web search when the recognized question needs current information. Search grounding can use additional Gemini quota and may incur charges.
 
+AURA distinguishes exhausted daily Gemini quotas from temporary service busy responses. If the daily limit is reached, check your Gemini API usage and billing or wait for the quota to reset; repeated retries cannot restore exhausted quota.
+
 ## Deploy to Render
 
 The included `render.yaml` configures a free Render web service in Singapore. Push this project to a GitHub repository, then in Render choose **New > Blueprint** and connect that repository. Render will prompt for `GEMINI_API_KEY`; enter it as a secret environment variable in Render, never in the repository or `render.yaml`. Render provides HTTPS and sets the service port automatically. The app binds to `127.0.0.1` locally and to `0.0.0.0` on Render.
